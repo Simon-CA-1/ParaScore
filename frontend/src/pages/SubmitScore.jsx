@@ -8,17 +8,21 @@ const SubmitScore = () => {
   const [formData, setFormData] = useState({
     playerName: '',
     srn: '',
-    game: '',
-    score: ''
+    game: 'ALTOS', // Auto-select Altos Adventure for direct input
+    score: '',
+    minutes: '',
+    seconds: '',
+    milliseconds: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCheaterWarning, setShowCheaterWarning] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submittedData, setSubmittedData] = useState(null);
 
   const games = [
-    { id: 'NFS', name: 'Need for Speed' },
-    { id: 'ALTOS', name: 'Altos Adventure' },
-    { id: 'SUBWAY', name: 'Subway Surfers' }
+    { id: 'NFS', name: 'Need for Speed', inputType: 'time' },
+    { id: 'ALTOS', name: 'Altos Adventure', inputType: 'score' },
+    { id: 'ULTRAKILL', name: 'ULTRAKILL', inputType: 'rank' }
   ];
 
   const handleInputChange = (e) => {
@@ -33,26 +37,112 @@ const SubmitScore = () => {
     e.preventDefault();
     setIsSubmitting(true);
     
+    // Format the score based on game type
+    const game = getCurrentGame();
+    let finalScore = formData.score;
+    
+    if (game?.inputType === 'time') {
+      // Format as MM:SS:mmm
+      const minutes = String(formData.minutes).padStart(2, '0');
+      const seconds = String(formData.seconds).padStart(2, '0'); 
+      const milliseconds = String(formData.milliseconds).padStart(3, '0');
+      finalScore = `${minutes}:${seconds}:${milliseconds}`;
+    }
+    
+    console.log('Submitting:', {
+      ...formData,
+      finalScore,
+      gameType: game?.inputType
+    });
+    
     // Simulate API call
     setTimeout(() => {
-      // Mock cheater detection (random for demo)
-      const isCheater = Math.random() < 0.2; // 20% chance for demo
+      // Cheater detection based on game-specific thresholds
+      let isCheater = false;
+      
+      if (game?.inputType === 'time') {
+        // NFS: Check if time is less than 2:26.000 (impossibly fast)
+        const totalMs = (parseInt(formData.minutes) * 60 * 1000) + 
+                       (parseInt(formData.seconds) * 1000) + 
+                       parseInt(formData.milliseconds);
+        const thresholdMs = 2 * 60 * 1000 + 26 * 1000; // 2:26.000 in milliseconds
+        if (totalMs < thresholdMs) {
+          isCheater = true;
+        }
+      } else if (game?.inputType === 'score') {
+        // Altos Adventure: Check if score is greater than 50,000
+        const scoreValue = parseInt(formData.score);
+        if (scoreValue > 50000) {
+          isCheater = true;
+        }
+      } else if (game?.inputType === 'rank') {
+        // ULTRAKILL: Check if rank is P (impossibly perfect)
+        if (formData.score === 'P') {
+          isCheater = true;
+        }
+      }
       
       if (isCheater) {
         setShowCheaterWarning(true);
         setTimeout(() => setShowCheaterWarning(false), 4000);
       } else {
+        // Store the submitted data for display
+        setSubmittedData({
+          playerName: formData.playerName,
+          srn: formData.srn,
+          game: game?.name || 'Unknown Game',
+          score: finalScore,
+          gameType: game?.inputType
+        });
         setSubmitSuccess(true);
+        
+        // Reload the form after 3 seconds
         setTimeout(() => {
           setSubmitSuccess(false);
-          navigate('/leaderboard');
-        }, 2000);
+          setSubmittedData(null);
+          // Reset form
+          setFormData({
+            playerName: '',
+            srn: '',
+            game: 'ALTOS',
+            score: '',
+            minutes: '',
+            seconds: '',
+            milliseconds: ''
+          });
+        }, 3000);
       }
       setIsSubmitting(false);
     }, 2000);
   };
 
-  const isFormValid = formData.playerName && formData.srn && formData.game && formData.score;
+  const getCurrentGame = () => games.find(g => g.id === formData.game);
+  
+  const getScoreLabel = () => {
+    const game = getCurrentGame();
+    if (!game) return 'Score';
+    switch (game.inputType) {
+      case 'time': return 'Race Time';
+      case 'rank': return 'Performance Rank';
+      default: return 'Score';
+    }
+  };
+  
+  const isFormValid = () => {
+    const game = getCurrentGame();
+    const baseValid = formData.playerName && formData.srn && formData.game;
+    
+    if (!baseValid) return false;
+    
+    switch (game?.inputType) {
+      case 'time':
+        return formData.minutes && formData.seconds && formData.milliseconds;
+      case 'rank':
+        return formData.score; // For ranks, score field holds the rank
+      default:
+        return formData.score;
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#0B0F2F] via-[#0F1B4A] to-[#0B0F2F] relative overflow-hidden">
@@ -226,16 +316,27 @@ const SubmitScore = () => {
                   }}
                   required
                 >
-                  <option value="">Select a game</option>
                   {games.map(game => (
                     <option key={game.id} value={game.id} className="bg-[#0B0F2F]">
                       {game.name}
                     </option>
                   ))}
                 </select>
+                {/* Game type indicator */}
+                <div className="mt-2 text-xs text-[#00E5FF]">
+                  {getCurrentGame()?.inputType === 'time' && (
+                    <span>⏱️ Submit your race completion time</span>
+                  )}
+                  {getCurrentGame()?.inputType === 'rank' && (
+                    <span>🏆 Select your performance rank</span>
+                  )}
+                  {getCurrentGame()?.inputType === 'score' && (
+                    <span>📊 Enter your highest score</span>
+                  )}
+                </div>
               </motion.div>
 
-              {/* Score */}
+              {/* Score/Time/Rank Input */}
               <motion.div
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -243,21 +344,97 @@ const SubmitScore = () => {
               >
                 <label className="block text-[#E6E8FF] text-sm font-semibold mb-2 flex items-center space-x-2">
                   <Trophy className="w-4 h-4 text-[#00E5FF]" />
-                  <span>Score</span>
+                  <span>{getScoreLabel()}</span>
                 </label>
-                <input
-                  type="number"
-                  name="score"
-                  value={formData.score}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 bg-[#0B0F2F] border-2 border-[#7B3FE4]/50 rounded-lg text-[#E6E8FF] placeholder-[#E6E8FF]/50 focus:border-[#FF4FD8] focus:outline-none transition-colors text-right font-mono text-xl"
-                  style={{
-                    boxShadow: "inset 0 0 10px rgba(123,63,228,0.2)"
-                  }}
-                  placeholder="0"
-                  min="0"
-                  required
-                />
+                
+                {getCurrentGame()?.inputType === 'time' ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <input
+                        type="number"
+                        name="minutes"
+                        value={formData.minutes}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-3 bg-[#0B0F2F] border-2 border-[#7B3FE4]/50 rounded-lg text-[#E6E8FF] placeholder-[#E6E8FF]/50 focus:border-[#FF4FD8] focus:outline-none transition-colors text-center font-mono text-xl"
+                        style={{
+                          boxShadow: "inset 0 0 10px rgba(123,63,228,0.2)"
+                        }}
+                        placeholder="MM"
+                        min="0"
+                        max="59"
+                        required
+                      />
+                      <p className="text-xs text-[#00E5FF] text-center mt-1">Minutes</p>
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        name="seconds"
+                        value={formData.seconds}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-3 bg-[#0B0F2F] border-2 border-[#7B3FE4]/50 rounded-lg text-[#E6E8FF] placeholder-[#E6E8FF]/50 focus:border-[#FF4FD8] focus:outline-none transition-colors text-center font-mono text-xl"
+                        style={{
+                          boxShadow: "inset 0 0 10px rgba(123,63,228,0.2)"
+                        }}
+                        placeholder="SS"
+                        min="0"
+                        max="59"
+                        required
+                      />
+                      <p className="text-xs text-[#00E5FF] text-center mt-1">Seconds</p>
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        name="milliseconds"
+                        value={formData.milliseconds}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-3 bg-[#0B0F2F] border-2 border-[#7B3FE4]/50 rounded-lg text-[#E6E8FF] placeholder-[#E6E8FF]/50 focus:border-[#FF4FD8] focus:outline-none transition-colors text-center font-mono text-xl"
+                        style={{
+                          boxShadow: "inset 0 0 10px rgba(123,63,228,0.2)"
+                        }}
+                        placeholder="MMM"
+                        min="0"
+                        max="999"
+                        required
+                      />
+                      <p className="text-xs text-[#00E5FF] text-center mt-1">Milliseconds</p>
+                    </div>
+                  </div>
+                ) : getCurrentGame()?.inputType === 'rank' ? (
+                  <select
+                    name="score"
+                    value={formData.score}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-[#0B0F2F] border-2 border-[#7B3FE4]/50 rounded-lg text-[#E6E8FF] focus:border-[#FF4FD8] focus:outline-none transition-colors cursor-pointer text-center font-bold text-2xl"
+                    style={{
+                      boxShadow: "inset 0 0 10px rgba(123,63,228,0.2)"
+                    }}
+                    required
+                  >
+                    <option value="">Select Rank</option>
+                    <option value="P" className="bg-[#0B0F2F] text-yellow-400">P - PERFECT</option>
+                    <option value="S" className="bg-[#0B0F2F] text-green-400">S - SUPREME</option>
+                    <option value="A" className="bg-[#0B0F2F] text-blue-400">A - AWESOME</option>
+                    <option value="B" className="bg-[#0B0F2F] text-purple-400">B - BRUTAL</option>
+                    <option value="C" className="bg-[#0B0F2F] text-orange-400">C - CRUEL</option>
+                    <option value="D" className="bg-[#0B0F2F] text-red-400">D - DESTRUCTIVE</option>
+                  </select>
+                ) : (
+                  <input
+                    type="number"
+                    name="score"
+                    value={formData.score}
+                    onChange={handleInputChange}
+                    className="w-full px-4 py-3 bg-[#0B0F2F] border-2 border-[#7B3FE4]/50 rounded-lg text-[#E6E8FF] placeholder-[#E6E8FF]/50 focus:border-[#FF4FD8] focus:outline-none transition-colors text-right font-mono text-xl"
+                    style={{
+                      boxShadow: "inset 0 0 10px rgba(123,63,228,0.2)"
+                    }}
+                    placeholder="0"
+                    min="0"
+                    required
+                  />
+                )}
               </motion.div>
 
               {/* Submit Button */}
@@ -268,20 +445,20 @@ const SubmitScore = () => {
               >
                 <motion.button
                   type="submit"
-                  disabled={!isFormValid || isSubmitting}
+                  disabled={!isFormValid() || isSubmitting}
                   className={`w-full py-4 px-6 rounded-lg font-bold text-lg relative overflow-hidden transition-all ${
-                    isFormValid && !isSubmitting
+                    isFormValid() && !isSubmitting
                       ? 'bg-gradient-to-r from-[#7B3FE4] to-[#FF4FD8] text-white cursor-pointer'
                       : 'bg-gray-600 text-gray-400 cursor-not-allowed'
                   }`}
                   style={{
-                    boxShadow: isFormValid && !isSubmitting ? "0 0 30px rgba(123,63,228,0.7)" : "none"
+                    boxShadow: isFormValid() && !isSubmitting ? "0 0 30px rgba(123,63,228,0.7)" : "none"
                   }}
-                  whileHover={isFormValid && !isSubmitting ? { 
+                  whileHover={isFormValid() && !isSubmitting ? { 
                     scale: 1.02,
                     boxShadow: "0 0 40px rgba(123,63,228,0.9)"
                   } : {}}
-                  whileTap={isFormValid && !isSubmitting ? { scale: 0.98 } : {}}
+                  whileTap={isFormValid() && !isSubmitting ? { scale: 0.98 } : {}}
                 >
                   <AnimatePresence mode="wait">
                     {isSubmitting ? (
@@ -314,7 +491,7 @@ const SubmitScore = () => {
                   </AnimatePresence>
                   
                   {/* Button glow effect */}
-                  {isFormValid && !isSubmitting && (
+                  {isFormValid() && !isSubmitting && (
                     <div className="absolute -inset-1 bg-gradient-to-r from-[#7B3FE4] to-[#FF4FD8] rounded-lg blur opacity-30 group-hover:opacity-50 transition-opacity" />
                   )}
                 </motion.button>
@@ -411,7 +588,7 @@ const SubmitScore = () => {
 
       {/* Success Modal */}
       <AnimatePresence>
-        {submitSuccess && (
+        {submitSuccess && submittedData && (
           <motion.div
             className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4"
             initial={{ opacity: 0 }}
@@ -419,7 +596,7 @@ const SubmitScore = () => {
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="bg-[#151A3F] border-2 border-[#00E5FF] rounded-2xl p-8 max-w-md w-full text-center"
+              className="bg-[#151A3F] border-2 border-[#00E5FF] rounded-2xl p-8 max-w-lg w-full text-center relative overflow-hidden"
               initial={{ scale: 0.5, y: 100 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.5, y: 100 }}
@@ -427,6 +604,7 @@ const SubmitScore = () => {
                 boxShadow: "0 0 50px rgba(0,229,255,0.8)"
               }}
             >
+              {/* Animated trophy */}
               <motion.div
                 animate={{ rotate: [0, 360] }}
                 transition={{ duration: 1, ease: "easeInOut" }}
@@ -434,13 +612,79 @@ const SubmitScore = () => {
                 <Trophy className="w-16 h-16 text-[#00E5FF] mx-auto mb-4" />
               </motion.div>
               
-              <h2 className="text-2xl font-bold text-[#E6E8FF] mb-2" style={{ fontFamily: 'Orbitron, monospace' }}>
+              {/* Success message */}
+              <h2 className="text-2xl font-bold text-[#E6E8FF] mb-4" style={{ fontFamily: 'Orbitron, monospace' }}>
                 SCORE SUBMITTED!
               </h2>
               
-              <p className="text-[#00E5FF]">
-                Redirecting to leaderboard...
-              </p>
+              {/* Submitted data display */}
+              <div className="bg-[#0B0F2F]/50 rounded-lg p-4 mb-4 border border-[#7B3FE4]/30">
+                <div className="space-y-2 text-left">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[#00E5FF] font-semibold">Player:</span>
+                    <span className="text-[#E6E8FF]">{submittedData.playerName}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[#00E5FF] font-semibold">SRN:</span>
+                    <span className="text-[#E6E8FF] font-mono">{submittedData.srn}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[#00E5FF] font-semibold">Game:</span>
+                    <span className="text-[#E6E8FF]">{submittedData.game}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-[#00E5FF] font-semibold">
+                      {submittedData.gameType === 'time' ? 'Time:' : 
+                       submittedData.gameType === 'rank' ? 'Rank:' : 'Score:'}
+                    </span>
+                    <span className={`font-bold text-xl ${
+                      submittedData.gameType === 'rank' ? {
+                        'P': 'text-yellow-400',
+                        'S': 'text-green-400', 
+                        'A': 'text-blue-400',
+                        'B': 'text-purple-400',
+                        'C': 'text-orange-400',
+                        'D': 'text-red-400'
+                      }[submittedData.score] || 'text-[#FF4FD8]' : 'text-[#FF4FD8]'
+                    }`}>
+                      {submittedData.gameType === 'time' ? (
+                        <span className="font-mono">{submittedData.score}</span>
+                      ) : submittedData.gameType === 'rank' ? (
+                        <span>{submittedData.score}</span>
+                      ) : (
+                        <span>{parseInt(submittedData.score).toLocaleString()}</span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Loading indicator */}
+              <div className="flex items-center justify-center space-x-2 text-[#00E5FF]">
+                <motion.div
+                  className="w-2 h-2 bg-[#00E5FF] rounded-full"
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ duration: 0.6, repeat: Infinity, delay: 0 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-[#00E5FF] rounded-full"
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ duration: 0.6, repeat: Infinity, delay: 0.2 }}
+                />
+                <motion.div
+                  className="w-2 h-2 bg-[#00E5FF] rounded-full"
+                  animate={{ scale: [1, 1.5, 1] }}
+                  transition={{ duration: 0.6, repeat: Infinity, delay: 0.4 }}
+                />
+                <span className="ml-2 text-sm">Returning to form...</span>
+              </div>
+
+              {/* Glow effect */}
+              <motion.div 
+                className="absolute inset-0 bg-gradient-to-b from-transparent via-[#00E5FF] to-transparent opacity-10 h-1"
+                animate={{ y: [0, 200, 0] }}
+                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+              />
             </motion.div>
           </motion.div>
         )}

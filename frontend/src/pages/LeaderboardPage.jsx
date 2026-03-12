@@ -11,19 +11,19 @@ const LeaderboardPage = () => {
   const [prevWinner, setPrevWinner] = useState(null);
 
   const games = [
-    { id: 'NFS', name: 'NFS' },
-    { id: 'ALTOS', name: 'Altos Adventure' },
-    { id: 'SUBWAY', name: 'Subway Surfers' }
+    { id: 'NFS', name: 'NFS', scoreType: 'time' },
+    { id: 'ALTOS', name: 'Altos Adventure', scoreType: 'score' },
+    { id: 'ULTRAKILL', name: 'ULTRAKILL', scoreType: 'rank' }
   ];
 
   // Mock data - replace with actual API call
   const mockData = {
     NFS: [
-      { rank: 1, name: 'SPEED_DEMON', srn: 'PES1234', score: 98750 },
-      { rank: 2, name: 'TURBO_RACER', srn: 'PES5678', score: 95420 },
-      { rank: 3, name: 'NEON_DRIFT', srn: 'PES9012', score: 92180 },
-      { rank: 4, name: 'CYBER_PILOT', srn: 'PES3456', score: 89360 },
-      { rank: 5, name: 'VOLT_RIDER', srn: 'PES7890', score: 85920 }
+      { rank: 1, name: 'SPEED_DEMON', srn: 'PES1234', score: '2:34:890' },
+      { rank: 2, name: 'TURBO_RACER', srn: 'PES5678', score: '2:41:450' },
+      { rank: 3, name: 'NEON_DRIFT', srn: 'PES9012', score: '2:47:230' },
+      { rank: 4, name: 'CYBER_PILOT', srn: 'PES3456', score: '2:53:160' },
+      { rank: 5, name: 'VOLT_RIDER', srn: 'PES7890', score: '3:02:920' }
     ],
     ALTOS: [
       { rank: 1, name: 'SKY_WALKER', srn: 'PES2468', score: 45300 },
@@ -32,23 +32,25 @@ const LeaderboardPage = () => {
       { rank: 4, name: 'WIND_RIDER', srn: 'PES8642', score: 35840 },
       { rank: 5, name: 'PEAK_CLIMBER', srn: 'PES7531', score: 32760 }
     ],
-    SUBWAY: [
-      { rank: 1, name: 'RAIL_RUNNER', srn: 'PES4820', score: 125000 },
-      { rank: 2, name: 'METRO_DASH', srn: 'PES6174', score: 118500 },
-      { rank: 3, name: 'TRACK_MASTER', srn: 'PES9260', score: 112300 },
-      { rank: 4, name: 'TUNNEL_KING', srn: 'PES3847', score: 105800 },
-      { rank: 5, name: 'SPEED_TRAIN', srn: 'PES7159', score: 99400 }
+    ULTRAKILL: [
+      { rank: 1, name: 'BLOOD_MACHINE', srn: 'PES2468', score: 'P' },
+      { rank: 2, name: 'VIOLENCE_LAYER', srn: 'PES1357', score: 'S' },
+      { rank: 3, name: 'GABRIEL_SLAYER', srn: 'PES9753', score: 'S' },
+      { rank: 4, name: 'STYLE_MASTER', srn: 'PES8642', score: 'A' },
+      { rank: 5, name: 'HELL_WALKER', srn: 'PES7531', score: 'A' }
     ]
   };
 
   useEffect(() => {
-    setLeaderboardData(mockData[activeGame] || []);
+    const newData = mockData[activeGame] || [];
+    const currentWinner = newData[0]?.name;
     
-    // Trigger confetti for new winner
-    const currentWinner = mockData[activeGame]?.[0]?.name;
-    if (currentWinner && prevWinner && currentWinner !== prevWinner) {
+    // Only trigger confetti when there's actually a NEW leader (not just game switch)
+    if (currentWinner && prevWinner && currentWinner !== prevWinner && leaderboardData.length > 0) {
       triggerConfetti();
     }
+    
+    setLeaderboardData(newData);
     setPrevWinner(currentWinner);
   }, [activeGame]);
 
@@ -87,28 +89,45 @@ const LeaderboardPage = () => {
     }
   };
 
-  const AnimatedScore = ({ score, delay = 0 }) => {
-    const [displayScore, setDisplayScore] = useState(0);
+  const AnimatedScore = ({ score, scoreType, delay = 0 }) => {
+    const [displayScore, setDisplayScore] = useState(scoreType === 'score' ? 0 : score);
 
     useEffect(() => {
-      const timer = setTimeout(() => {
-        let start = 0;
-        const increment = score / 50;
-        const counter = setInterval(() => {
-          start += increment;
-          if (start >= score) {
-            setDisplayScore(score);
-            clearInterval(counter);
-          } else {
-            setDisplayScore(Math.floor(start));
-          }
-        }, 30);
-      }, delay);
+      if (scoreType === 'score') {
+        const timer = setTimeout(() => {
+          let start = 0;
+          const increment = score / 50;
+          const counter = setInterval(() => {
+            start += increment;
+            if (start >= score) {
+              setDisplayScore(score);
+              clearInterval(counter);
+            } else {
+              setDisplayScore(Math.floor(start));
+            }
+          }, 30);
+        }, delay);
+        return () => clearTimeout(timer);
+      } else {
+        setDisplayScore(score);
+      }
+    }, [score, scoreType, delay]);
 
-      return () => clearTimeout(timer);
-    }, [score, delay]);
-
-    return <span>{displayScore.toLocaleString()}</span>;
+    if (scoreType === 'score') {
+      return <span>{displayScore.toLocaleString()}</span>;
+    } else if (scoreType === 'rank') {
+      const rankColors = {
+        'P': 'text-yellow-400',
+        'S': 'text-green-400', 
+        'A': 'text-blue-400',
+        'B': 'text-purple-400',
+        'C': 'text-orange-400',
+        'D': 'text-red-400'
+      };
+      return <span className={`font-bold text-2xl ${rankColors[score] || 'text-gray-400'}`}>{displayScore}</span>;
+    } else {
+      return <span className="font-mono">{displayScore}</span>;
+    }
   };
 
   return (
@@ -189,7 +208,7 @@ const LeaderboardPage = () => {
                 {games.map((game) => (
                   <motion.button
                     key={game.id}
-                    className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                    className={`px-4 py-3 rounded-lg font-semibold transition-all text-sm ${
                       activeGame === game.id
                         ? 'bg-gradient-to-r from-[#7B3FE4] to-[#FF4FD8] text-white shadow-[0_0_20px_rgba(123,63,228,0.7)]'
                         : 'text-[#E6E8FF] hover:text-[#FF4FD8] hover:bg-[#7B3FE4]/20'
@@ -210,7 +229,9 @@ const LeaderboardPage = () => {
                 <div className="col-span-2 text-center">Rank</div>
                 <div className="col-span-4">Player Name</div>
                 <div className="col-span-3">SRN</div>
-                <div className="col-span-3 text-right">Score</div>
+                <div className="col-span-3 text-right">
+                  {activeGame === 'NFS' ? 'Time' : activeGame === 'ULTRAKILL' ? 'Rank' : 'Score'}
+                </div>
               </div>
             </div>
 
@@ -261,7 +282,11 @@ const LeaderboardPage = () => {
                     {/* Score */}
                     <div className="col-span-3 flex items-center justify-end">
                       <span className="text-[#FF4FD8] font-bold text-xl">
-                        <AnimatedScore score={player.score} delay={index * 100} />
+                        <AnimatedScore 
+                          score={player.score} 
+                          scoreType={games.find(g => g.id === activeGame)?.scoreType || 'score'} 
+                          delay={index * 100} 
+                        />
                       </span>
                     </div>
                   </motion.div>

@@ -105,26 +105,21 @@ const handleSubmit = async (e) => {
 
     setSubmitSuccess(true);
 
+    // Redirect to leaderboard after 2 seconds
     setTimeout(() => {
-      setSubmitSuccess(false);
-      setSubmittedData(null);
-
-      setFormData({
-        playerName: "",
-        srn: "",
-        game: "ALTOS",
-        score: "",
-        minutes: "",
-        seconds: "",
-        milliseconds: "",
+      navigate('/leaderboard', { 
+        state: { 
+          gameId: formData.game,
+          newPlayer: formData.playerName,
+          newScore: finalScore
+        } 
       });
-    }, 3000);
+    }, 2000);
   } catch (err) {
     console.error(err);
     alert("Error submitting score");
+    setIsSubmitting(false);
   }
-
-  setIsSubmitting(false);
 };
 
   const getCurrentGame = () => games.find(g => g.id === formData.game);

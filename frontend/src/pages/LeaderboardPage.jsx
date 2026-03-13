@@ -1,17 +1,25 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, Medal, Crown, Gamepad2, ArrowLeft } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import confetti from "canvas-confetti";
 import API from "../services/api";
 
 const LeaderboardPage = () => {
 
 const navigate = useNavigate();
+const location = useLocation();
+const confettiShownRef = useRef(false);
+const initialLocationProcessed = useRef(false);
+const gameIndexRef = useRef(0);
 
 const [activeGame,setActiveGame] = useState("NFS");
+const [autoSwitchEnabled,setAutoSwitchEnabled] = useState(true);
 const [leaderboardData,setLeaderboardData] = useState([]);
 const [prevWinner,setPrevWinner] = useState(null);
+const [prevLeaderboard,setPrevLeaderboard] = useState([]);
+const [newSubmission,setNewSubmission] = useState(location.state?.newPlayer || null);
+const [hasCheckedNewSubmission,setHasCheckedNewSubmission] = useState(false);
 
 const games = [
 { id:"NFS", name:"NFS", scoreType:"time"},
@@ -20,8 +28,33 @@ const games = [
 ];
 
 
+// Handle game switching and reset new submission state
+const handleGameChange = (gameId) => {
+setAutoSwitchEnabled(true); // Resume auto-switch when user manually switches
+setActiveGame(gameId);
+setPrevLeaderboard([]);
+setPrevWinner(null);
+setNewSubmission(null);
+setHasCheckedNewSubmission(false);
+confettiShownRef.current = false;
+};
+
+
+// Set active game from location state if coming from SubmitScore (one-time)
+useEffect(()=>{
+if(location.state?.gameId && !initialLocationProcessed.current){
+setActiveGame(location.state.gameId);
+initialLocationProcessed.current = true;
+setAutoSwitchEnabled(false); // Disable auto-switch when coming from submit
+}
+},[]);
+
 // Fetch leaderboard from backend
 useEffect(()=>{
+
+// Reset previous states when game changes
+setPrevLeaderboard([]);
+setPrevWinner(null);
 
 loadScores();
 
@@ -30,6 +63,22 @@ const interval = setInterval(loadScores,3000);
 return ()=>clearInterval(interval);
 
 },[activeGame]);
+
+// Auto-switch between games every 10 seconds
+useEffect(()=>{
+if(!autoSwitchEnabled) return;
+
+const gameOrder = ["NFS", "ALTOS", "ULTRAKILL"];
+gameIndexRef.current = gameOrder.indexOf(activeGame);
+
+const autoSwitchInterval = setInterval(()=>{
+gameIndexRef.current = (gameIndexRef.current + 1) % gameOrder.length;
+setActiveGame(gameOrder[gameIndexRef.current]);
+}, 10000);
+
+return ()=>clearInterval(autoSwitchInterval);
+
+},[autoSwitchEnabled]);
 
 
 async function loadScores(){
@@ -53,12 +102,24 @@ score:player.score
 
 const currentWinner = filtered[0]?.name;
 
-if(currentWinner && prevWinner && currentWinner !== prevWinner){
-triggerConfetti();
+// Only check new submission on first load
+if(newSubmission && !hasCheckedNewSubmission && !confettiShownRef.current){
+if(filtered[0]?.name === newSubmission){
+triggerConfetti("new_leader");
+confettiShownRef.current = true;
+}
+setNewSubmission(null);
+setHasCheckedNewSubmission(true);
+}
+
+// Check if winner changed (only for subsequent refreshes, not new submissions, and not during auto-switch)
+if(currentWinner && prevWinner && currentWinner !== prevWinner && !newSubmission && !autoSwitchEnabled){
+triggerConfetti("winner");
 }
 
 setLeaderboardData(filtered);
 setPrevWinner(currentWinner);
+setPrevLeaderboard(filtered);
 
 }catch(err){
 
@@ -69,15 +130,50 @@ console.error("Error loading leaderboard",err);
 }
 
 
-const triggerConfetti = () => {
+const triggerConfetti = (type = "winner") => {
+// Enhanced confetti effects for new leaders
+if(type === "new_leader"){
+// Left burst
+confetti({
+particleCount:150,
+spread:70,
+origin:{x:0.2, y:0.5},
+colors:["#FF4FD8","#7B3FE4","#00E5FF"],
+gravity:0.8,
+decay:0.95
+});
 
+// Right burst
+confetti({
+particleCount:150,
+spread:70,
+origin:{x:0.8, y:0.5},
+colors:["#FF4FD8","#7B3FE4","#00E5FF"],
+gravity:0.8,
+decay:0.95
+});
+
+// Top center burst
+setTimeout(()=>{
+confetti({
+particleCount:200,
+spread:90,
+origin:{x:0.5, y:0},
+colors:["#7B3FE4","#FF4FD8","#00E5FF"],
+gravity:1,
+velocity:50
+});
+}, 100);
+
+} else {
+// Standard confetti for winner change
 confetti({
 particleCount:120,
 spread:80,
 origin:{y:0.6},
 colors:["#7B3FE4","#FF4FD8","#00E5FF"]
 });
-
+}
 };
 
 
@@ -146,7 +242,7 @@ Real-time Rankings
 {games.map(game=>(
 <button
 key={game.id}
-onClick={()=>setActiveGame(game.id)}
+onClick={()=>handleGameChange(game.id)}
 className={`px-4 py-2 rounded ${
 activeGame===game.id
 ? "bg-gradient-to-r from-[#7B3FE4] to-[#FF4FD8]"
@@ -162,7 +258,16 @@ activeGame===game.id
 
 {/* Leaderboard */}
 
-<div className="max-w-4xl mx-auto bg-[#151A3F] rounded-xl p-6 border border-[#7B3FE4]">
+<AnimatePresence mode="wait">
+
+<motion.div
+key={activeGame}
+className="max-w-4xl mx-auto bg-[#151A3F] rounded-xl p-6 border border-[#7B3FE4]"
+initial={{opacity:0,y:10}}
+animate={{opacity:1,y:0}}
+exit={{opacity:0,y:-10}}
+transition={{duration:0.4,ease:"easeInOut"}}
+>
 
 <div className="grid grid-cols-12 mb-4 text-[#00E5FF]">
 
@@ -208,7 +313,9 @@ transition={{delay:index*0.1}}
 
 </AnimatePresence>
 
-</div>
+</motion.div>
+
+</AnimatePresence>
 
 
 <div className="text-center mt-6 text-[#E6E8FF]/70">

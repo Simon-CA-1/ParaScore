@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 
 // Import pages
 import Home from './pages/Home';
@@ -12,17 +12,14 @@ import './index.css';
 
 function App() {
   return (
-    <Router>
-      <div className="App">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route path="/submit-score" element={<SubmitScore />} />
-          <Route path="/admin" element={<AdminLogin />} />
-          <Route path="/login" element={<Login />} />
-        </Routes>
-      </div>
-    </Router>
+    <div className="App">
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route path="/submit-score" element={<SubmitScore />} />
+        <Route path="/admin" element={<AdminLogin />} />
+      </Routes>
+    </div>
   );
 }
 
